@@ -1,19 +1,21 @@
 import pandas as pd
+import datetime
+import sys
 
 # Global variables, can be replaced with command line arguments
 INPUT_FILENAME = "Cond2_sorted.csv"
-OUTPUT_FILENAME = "Cond2_with_rewards.csv"
+R_OUTPUT_FILENAME = "Cond2_with_rewards.csv"
+RA_OUTPUT_FILENAME = "Cond2_with_action_rewards.csv"
 
 
 # Function for creating dictionary mapping column header to index
-def index_dictionary(header_line):
+def index_dictionary(header_line, extras):
     in_dict = dict()
-    header_split = header_line.split(",")
+    header_split = header_line.replace("\n","").split(",")
     for ele, index in zip(header_split, range(len(header_split))):
         in_dict[ele] = index
-    extras = ["reward", "action-reward"]
     for e, i in zip(extras, range(len(header_split), len(header_split) + len(extras))):
-        in_dict[e] = i
+            in_dict[e] = i
     return in_dict
 
 
@@ -31,7 +33,7 @@ def pull_rule_score(rule_cell, select_index = 0):
 
 
 # Replacing each of the rule score semi-colons with single value
-def replace_rule_score(line, select_index=0):
+def replace_rule_score(line, select_index, header_indexes, score_columns):
     line_split = line.split(",")
     for e in header_indexes.keys():
          if e in score_columns:
@@ -39,7 +41,7 @@ def replace_rule_score(line, select_index=0):
     return ",".join(line_split)
 
 
-def reward_function(line):
+def reward_function(line, header_indexes, score_columns):
     line_split = line.split(",")
     reward_sum = 0
     for e in header_indexes.keys():
@@ -62,28 +64,78 @@ def remove_excess_commas(line):
             pass
         else:
             replace_line += char
-    return replace_line
+    return replace_line.replace("\n","")
 
 
-
-# Data Initialization
-data_file = open(INPUT_FILENAME, "r")
-header_line = data_file.readline()
-output_file = open(OUTPUT_FILENAME, "w")
-
-header_indexes = index_dictionary(header_line)
-score_columns = get_score_cols(header_line)
-#output_file.write(header_line)
-
-
-for line in data_file:
-    #line = data_file.readline()
-    line = remove_excess_commas(line)
-    line = replace_rule_score(line=line, select_index=0)
-    line = reward_function(line=line)
-    # output_file.write(line)
-
-data_file.close()
-output_file.close()
+def get_action_reward(current_line, previous_line, header_indexes):
+    try:
+        future_reward = float(current_line.split(",")[header_indexes["rewards"]])
+        current_reward = float(previous_line.split(",")[header_indexes["rewards"]])
+        action_reward = future_reward - current_reward
+    except ValueError:
+        action_reward = "NaN"
+    except IndexError:
+        action_reward = "NaN"
+    return previous_line.replace("\n","") + "," + str(action_reward)
 
 
+def set_rewards(input_filename=INPUT_FILENAME, output_filename=R_OUTPUT_FILENAME):
+    print "Setting Rewards: ", datetime.datetime.now()
+    # Data Initialization
+    data_file = open(input_filename, "r")
+    header_line = data_file.readline().replace("\n","")
+    output_file = open(output_filename, "w")
+
+    header_indexes = index_dictionary(header_line, extras=["rewards"])
+    score_columns = get_score_cols(header_line)
+    output_file.write(header_line+",rewards\n")
+
+    for line in data_file:
+        #line = data_file.readline()
+        line = remove_excess_commas(line)
+        line = replace_rule_score(line=line, select_index=0, header_indexes=header_indexes, score_columns=score_columns)
+        line = reward_function(line=line, header_indexes=header_indexes, score_columns=score_columns)
+        output_file.write(line+"\n")
+
+    data_file.close()
+    output_file.close()
+    print "Rewards Set in %s : " % output_filename, datetime.datetime.now()
+
+
+def set_action_rewards(input_filename=R_OUTPUT_FILENAME, output_filename=RA_OUTPUT_FILENAME):
+    print "Setting Action-Rewards from %s : " % input_filename,datetime.datetime.now()
+    data_file = open(input_filename, "r")
+    header_line = data_file.readline().replace("\n","")
+    output_file = open(output_filename, "w")
+
+    header_indexes = index_dictionary(header_line, extras=["action-reward"])
+    output_file.write(header_line+",action-rewards\n")
+    prev_line = ""
+    alt_prev_line = ""
+    prev_id = ""
+
+    for line in data_file:
+        line_split = line.split(",")
+        current_id = line_split[header_indexes["studentID"]]
+        if current_id != prev_id and prev_id != "":
+            prev_id = current_id
+            alt_prev_line = get_action_reward(current_line=line, previous_line=alt_prev_line, header_indexes=header_indexes)
+            output_file.write(alt_prev_line+"\n")
+        elif len(line_split[header_indexes["hintGiven"]]) > 1:
+            prev_line = get_action_reward(current_line=line, previous_line=prev_line, header_indexes=header_indexes)
+            output_file.write(prev_line+"\n")
+            prev_line = line
+        alt_prev_line = line
+    data_file.close()
+    output_file.close()
+    print "Action-Rewards Set in %s : " % output_filename, datetime.datetime.now()
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        for filename in sys.argv[1:]:
+            set_rewards(input_filename=filename, output_filename=filename+"_rewards.csv")
+            set_action_rewards(input_filename=filename+"_rewards.csv", output_filename=filename+"_action_rewards.csv")
+    else:
+        print "Using default input file: %s" % INPUT_FILENAME
+        set_rewards(input_filename=INPUT_FILENAME, output_filename=INPUT_FILENAME+"_rewards.csv")
+        set_action_rewards(input_filename=INPUT_FILENAME+"_rewards.csv", output_filename=INPUT_FILENAME+"_action_rewards.csv")
