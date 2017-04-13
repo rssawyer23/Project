@@ -11,7 +11,7 @@ def index_dictionary(header_line):
     for ele, index in zip(header_split, range(len(header_split))):
         in_dict[ele] = index
     extras = ["reward", "action-reward"]
-    for e, i in zip(extras, range(len(header_split)+1, len(header_split) + len(extras) + 1)):
+    for e, i in zip(extras, range(len(header_split), len(header_split) + len(extras))):
         in_dict[e] = i
     return in_dict
 
@@ -21,6 +21,49 @@ def get_score_cols(header_line):
     header_split = header_line.split(",")
     score_cols = [ele for ele in header_split if "score" in ele]
     return score_cols
+
+
+# Pulling a single value out of the semi-colon separated rule score cells
+def pull_rule_score(rule_cell, select_index = 0):
+    rule_split = rule_cell.split(";")
+    return rule_split[select_index]
+
+
+# Replacing each of the rule score semi-colons with single value
+def replace_rule_score(line):
+    line_split = line.split(",")
+    for e in header_indexes.keys():
+         if e in score_columns:
+             line_split[header_indexes[e]] = pull_rule_score(line_split[header_indexes[e]],select_index=0)
+    return ",".join(line_split)
+
+
+def reward_function(line):
+    line_split = line.split(",")
+    reward_sum = 0
+    for e in header_indexes.keys():
+        if e in score_columns:
+            try:
+                reward_sum += float(line_split[header_indexes[e]])
+            except ValueError:
+                reward_sum += 0
+    line_split += ["%.4f" % reward_sum]
+    return ",".join(line_split)
+
+
+def remove_excess_commas(line):
+    replace_line = ""
+    quote_on = False
+    for char in line:
+        if char == "\"":
+            quote_on = not quote_on
+        elif quote_on and char == ",":
+            pass
+        else:
+            replace_line += char
+    return replace_line
+
+
 
 # Data Initialization
 data_file = open(INPUT_FILENAME, "r")
@@ -33,5 +76,9 @@ score_columns = get_score_cols(header_line)
 #for line in data_file:
 for i in range(10):
     line = data_file.readline()
-    line_split = line.split(",")
+    line = remove_excess_commas(line)
+    line = replace_rule_score(line=line)
+    line = reward_function(line=line)
+    print line.split(",")[header_indexes["reward"]]
+
 
