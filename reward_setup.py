@@ -64,7 +64,7 @@ def remove_excess_commas(line):
             pass
         else:
             replace_line += char
-    return replace_line.replace("\n","")
+    return replace_line.replace("\n","").replace('"',"")
 
 
 def get_action_reward(current_line, previous_line, header_indexes, score_cols, weight=2):
@@ -124,12 +124,12 @@ def check_line_conditions(line_split, header_indexes):
 def set_action_rewards(input_filename=R_OUTPUT_FILENAME, output_filename=RA_OUTPUT_FILENAME):
     print "Setting Action-Rewards from %s : " % input_filename, datetime.datetime.now()
     data_file = open(input_filename, "r")
-    header_line = data_file.readline().replace("\n","")
+    header_line = data_file.readline().replace("\n","").replace('"','')
     output_file = open(output_filename, "w")
     score_columns = get_score_cols(header_line)
 
     header_indexes = index_dictionary(header_line, extras=["action-reward"])
-    output_file.write(header_line+",action-rewards,is-terminal\n")
+    output_file.write(header_line+",action_rewards,not_terminal\n")
     prev_line = ""
     alt_prev_line = ""
     prev_id = ""
@@ -138,8 +138,8 @@ def set_action_rewards(input_filename=R_OUTPUT_FILENAME, output_filename=RA_OUTP
         line = remove_excess_commas(line)
         line = replace_rule_score(line=line, select_index=0, header_indexes=header_indexes, score_columns=score_columns)
         line_split = line.split(",")
-        current_id = line_split[header_indexes["studentID"]]
-        if current_id != prev_id and prev_id != "":  # indicates new student, immediately previous line is terminal action
+        current_id = line_split[header_indexes["studentID"]] # keep track of problem number instead of student id
+        if current_id != prev_id and prev_id != "": #or moved to next problem hintType=0:  # indicates new student, immediately previous line is terminal action
             prev_line = get_action_reward(current_line=alt_prev_line, previous_line=prev_line, header_indexes=header_indexes, score_cols=score_columns)
             output_file.write(prev_line+",0\n")
             prev_line = line
@@ -156,8 +156,8 @@ def set_action_rewards(input_filename=R_OUTPUT_FILENAME, output_filename=RA_OUTP
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         for filename in sys.argv[1:]:
-            set_rewards(input_filename=filename, output_filename=filename+"_rewards.csv")
-            set_action_rewards(input_filename=filename+"_rewards.csv", output_filename=filename+"_action_rewards.csv")
+            #set_rewards(input_filename=filename, output_filename=filename+"_rewards.csv")
+            set_action_rewards(input_filename=filename, output_filename=filename[:-4]+"_action_rewards.csv")
     else:
         print "Using default input file: %s" % INPUT_FILENAME
         #set_rewards(input_filename=INPUT_FILENAME, output_filename=INPUT_FILENAME+"_rewards.csv")
