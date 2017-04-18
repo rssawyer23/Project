@@ -67,11 +67,23 @@ def remove_excess_commas(line):
     return replace_line.replace("\n","")
 
 
-def get_action_reward(current_line, previous_line, header_indexes):
+def get_action_reward(current_line, previous_line, header_indexes, score_cols, weight=2):
     try:
-        future_reward = float(current_line.split(",")[header_indexes["rewards"]])
-        current_reward = float(previous_line.split(",")[header_indexes["rewards"]])
-        action_reward = future_reward - current_reward
+        #future_reward = float(current_line.split(",")[header_indexes["rewards"]])
+        #current_reward = float(previous_line.split(",")[header_indexes["rewards"]])
+
+        vector = []
+        for e in score_cols:
+            future_rs = float(current_line.split(",")[header_indexes[e]])
+            current_rs = float(previous_line.split(",")[header_indexes[e]])
+            difference = future_rs - current_rs
+            if difference < 0:
+                vector.append(difference * weight)
+            else:
+                vector.append(difference)
+        action_reward = sum(vector)
+
+        #action_reward = future_reward - current_reward
     except ValueError:
         action_reward = "NaN"
     except IndexError:
@@ -102,29 +114,40 @@ def set_rewards(input_filename=INPUT_FILENAME, output_filename=R_OUTPUT_FILENAME
     print "Rewards Set in %s : " % output_filename, datetime.datetime.now()
 
 
+def check_line_conditions(line_split, header_indexes):
+    a = len(line_split[header_indexes["hintGiven"]]) > 1 # indicates not a tutor action (hint given) step
+    b = line_split[header_indexes["hintType"]] != "1" # indicates worked example
+    c = line_split[header_indexes["hintGiven"]] != "No hint available for this step." # tutor not actually performing action (unable to give a hint)
+    return a and b and c
+
+
 def set_action_rewards(input_filename=R_OUTPUT_FILENAME, output_filename=RA_OUTPUT_FILENAME):
-    print "Setting Action-Rewards from %s : " % input_filename,datetime.datetime.now()
+    print "Setting Action-Rewards from %s : " % input_filename, datetime.datetime.now()
     data_file = open(input_filename, "r")
     header_line = data_file.readline().replace("\n","")
     output_file = open(output_filename, "w")
+    score_columns = get_score_cols(header_line)
 
     header_indexes = index_dictionary(header_line, extras=["action-reward"])
-    output_file.write(header_line+",action-rewards\n")
+    output_file.write(header_line+",action-rewards,is-terminal\n")
     prev_line = ""
     alt_prev_line = ""
     prev_id = ""
 
     for line in data_file:
+        line = remove_excess_commas(line)
+        line = replace_rule_score(line=line, select_index=0, header_indexes=header_indexes, score_columns=score_columns)
         line_split = line.split(",")
         current_id = line_split[header_indexes["studentID"]]
-        if current_id != prev_id and prev_id != "":
-            prev_id = current_id
-            alt_prev_line = get_action_reward(current_line=line, previous_line=alt_prev_line, header_indexes=header_indexes)
-            output_file.write(alt_prev_line+"\n")
-        elif len(line_split[header_indexes["hintGiven"]]) > 1:
-            prev_line = get_action_reward(current_line=line, previous_line=prev_line, header_indexes=header_indexes)
-            output_file.write(prev_line+"\n")
+        if current_id != prev_id and prev_id != "":  # indicates new student, immediately previous line is terminal action
+            prev_line = get_action_reward(current_line=alt_prev_line, previous_line=prev_line, header_indexes=header_indexes, score_cols=score_columns)
+            output_file.write(prev_line+",0\n")
             prev_line = line
+        elif check_line_conditions(line_split, header_indexes):
+            prev_line = get_action_reward(current_line=line, previous_line=prev_line, header_indexes=header_indexes, score_cols=score_columns)
+            output_file.write(prev_line+",1\n")
+            prev_line = line
+        prev_id = current_id
         alt_prev_line = line
     data_file.close()
     output_file.close()
@@ -137,5 +160,5 @@ if __name__ == "__main__":
             set_action_rewards(input_filename=filename+"_rewards.csv", output_filename=filename+"_action_rewards.csv")
     else:
         print "Using default input file: %s" % INPUT_FILENAME
-        set_rewards(input_filename=INPUT_FILENAME, output_filename=INPUT_FILENAME+"_rewards.csv")
-        set_action_rewards(input_filename=INPUT_FILENAME+"_rewards.csv", output_filename=INPUT_FILENAME+"_action_rewards.csv")
+        #set_rewards(input_filename=INPUT_FILENAME, output_filename=INPUT_FILENAME+"_rewards.csv")
+        set_action_rewards(input_filename=INPUT_FILENAME, output_filename=INPUT_FILENAME[:-4]+"_action_rewards.csv")
