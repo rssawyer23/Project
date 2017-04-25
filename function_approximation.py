@@ -4,9 +4,9 @@ from sklearn.linear_model import LinearRegression
 from sklearn.linear_model import Ridge
 import math
 
-INPUT_FILENAMES = ["ExtractedData_420/acttab2_all_action_rewards.csv",
-                   "ExtractedData_420/acttab5_all_action_rewards.csv",
-                   "ExtractedData_420/acttab6_all_action_rewards.csv"]
+INPUT_FILENAMES = ["ExtractedData_424/acttab2_all_action_rewards.csv",
+                   "ExtractedData_424/acttab5_all_action_rewards.csv",
+                   "ExtractedData_424/acttab6_all_action_rewards.csv"]
 #INPUT_COLUMNS = ["hintType", "hintReceived", "proactiveHintReceived", "hintRequested", "cumul_hintsReceived", "cumul_proactiveHintsReceived", "cumul_hintsRequested"]
 # Cutting easyWE, difficultWE, restartCount
 INPUT_COLUMNS = ['hintType', 'elTime', 'newInteraction', 'hintReceived', 'proactiveHintReceived', 'hintRequested', 'cumul_hintsReceived',
@@ -159,7 +159,7 @@ def traditional_ECR(full_data, input_data, input_columns, model):
 # Sampled ECR
 # Treating data as following a multivariate normal distribution in order to draw samples
 # fa.predict takes max A, returns mean of Q_values
-def sampled_ECR(full_data, input_data, model, sample_size=100):
+def sampled_ECR(full_data, input_data, model, sample_size=10000):
     mean_vector = np.mean(full_data, axis=0)
     cov_matrix = np.cov(full_data, rowvar=False)
     sample_data = np.random.multivariate_normal(mean_vector, cov_matrix, size=sample_size)
@@ -217,13 +217,16 @@ while prediction_sos > delta_threshold:
 print "Printing Coefficients:"
 for i in range(input_data.shape[1]):
     print "%s:\t %.4f" % (list(input_data.columns.values)[i], model.coef_[i])
+# Calculating the average and std for each ECR, could also plot histograms of the ECRs
+print "R^2: %.5f" % (model.score(input_data, labels))
 t_ECR, t_ECR_std, t_actions = traditional_ECR(full_data, input_data, list(input_data.columns.values), model)
-print "Traditional ECR:%.5f +/-%.4f, percent A1:%.3f" % (t_ECR, 2*t_ECR_std, np.mean(t_actions))
+print "Traditional ECR:%.5f +/- %.4f, percent A1:%.3f" % (t_ECR, 2*t_ECR_std, np.mean(t_actions))
 non_inter_inputs = [e for e in list(input_data.columns.values) if "-Interaction" not in e]
 s_ECR, s_ECR_std, s_actions = sampled_ECR(full_data.loc[:, non_inter_inputs], input_data, model)
-print "Sampled ECR:%.5f, +/-%.4f, percent A1:%.3f" % (s_ECR, 2*s_ECR_std, np.mean(s_actions))
+print "Sampled ECR:%.5f, +/- %.4f, percent A1:%.3f" % (s_ECR, 2*s_ECR_std, np.mean(s_actions))
+# Baseline is average and std discounted cumulative reward of all students
 base_ECR, base_ECR_std, b_actions = baseline_ECR(full_data)
-print "Baseline ECR:%.5f, +/-%.4f, percent A1:%.3f" % (base_ECR, 2*base_ECR_std, np.mean(b_actions))
-# Calculate average action-reward per student
+print "Baseline ECR:%.5f, +/- %.4f, percent A1:%.3f" % (base_ECR, 2*base_ECR_std, np.mean(b_actions))
+
 # Calculate the rows from each separate data file using the function? -> ECR for three different policies
 
