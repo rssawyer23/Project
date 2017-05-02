@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.linear_model import Ridge
 import math
+from scipy import stats
 
 INPUT_FILENAMES = ["ExtractedData_424/acttab2_all_action_rewards.csv",
                    "ExtractedData_424/acttab5_all_action_rewards.csv",
@@ -169,6 +170,11 @@ def sampled_ECR(full_data, input_data, model, sample_size=10000):
     return np.mean(Q_values), np.std(Q_values), actions_selected
 
 
+def data_ECR(full_data, input_data, model):
+    Q_values, actions_selected = predict(model, full_data.loc[:,input_data.columns], full_data)
+    return np.mean(Q_values), np.std(Q_values), actions_selected
+
+
 # Calculating the baseline ECR from the data
 # Calculating average cumulative reward for each student in data
 def baseline_ECR(full_data):
@@ -192,6 +198,7 @@ model = Ridge(alpha=1.0)
 delta_threshold = 0.05
 prediction_sos = delta_threshold + 0.1 # Adding some constant to guarantee initial running of while loop
 full_data, input_data, non_terminal_rows, labels, immediate_rewards = initialize_data(INPUT_FILENAMES, INPUT_COLUMNS)
+og_labels = labels.copy()
 all_removed_features = []
 removed_features = []
 iteration = 0
@@ -221,12 +228,18 @@ for i in range(input_data.shape[1]):
 print "R^2: %.5f" % (model.score(input_data, labels))
 t_ECR, t_ECR_std, t_actions = traditional_ECR(full_data, input_data, list(input_data.columns.values), model)
 print "Traditional ECR:%.5f +/- %.4f, percent A1:%.3f" % (t_ECR, 2*t_ECR_std, np.mean(t_actions))
+d_ECR, d_ECR_std, d_actions = data_ECR(full_data, input_data, model)
+print "Data ECR:%.5f +/- %.4f, percent A1:%.3f" % (d_ECR, 2*d_ECR_std, np.mean(d_actions))
 non_inter_inputs = [e for e in list(input_data.columns.values) if "-Interaction" not in e]
 s_ECR, s_ECR_std, s_actions = sampled_ECR(full_data.loc[:, non_inter_inputs], input_data, model)
 print "Sampled ECR:%.5f, +/- %.4f, percent A1:%.3f" % (s_ECR, 2*s_ECR_std, np.mean(s_actions))
 # Baseline is average and std discounted cumulative reward of all students
 base_ECR, base_ECR_std, b_actions = baseline_ECR(full_data)
 print "Baseline ECR:%.5f, +/- %.4f, percent A1:%.3f" % (base_ECR, 2*base_ECR_std, np.mean(b_actions))
+diff = labels - og_labels
+print "Original Label to Final Label SOS: %.4f, Mean Diff:%.4f" % (diff.dot(diff.T), np.mean(diff))
+print pd.Series(og_labels).describe()
+print "TESTING"
 
 # Calculate the rows from each separate data file using the function? -> ECR for three different policies
 
